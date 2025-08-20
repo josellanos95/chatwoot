@@ -32,10 +32,12 @@ RUN apk update && apk add --no-cache \
   postgresql-dev \
   postgresql-client \
   git \
+  libxml2 \
+  libxslt \
   curl \
   xz \
   && mkdir -p /var/app \
-  && gem install bundler
+  && gem install bundler -v ${BUNDLER_VERSION}
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -58,14 +60,16 @@ WORKDIR /app
 
 COPY Gemfile Gemfile.lock ./
 
-# natively compile grpc and protobuf to support alpine musl (dialogflow-docker workflow)
-# https://github.com/googleapis/google-cloud-ruby/issues/13306
-# adding xz as nokogiri was failing to build libxml
-# https://github.com/chatwoot/chatwoot/issues/4045
-RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips
-RUN bundle config set --local force_ruby_platform true
+# Install build dependencies for gems
+RUN apk update && apk add --no-cache \
+  build-base musl ruby-full ruby-dev gcc make musl-dev \
+  openssl openssl-dev g++ linux-headers xz vips \
+  libxml2-dev libxslt-dev zlib-dev pkgconfig
 
-# Do not install development or test gems in production
+RUN bundle config set --local force_ruby_platform true
+ENV NOKOGIRI_USE_SYSTEM_LIBRARIES=1
+
+# Install gems
 RUN if [ "$RAILS_ENV" = "production" ]; then \
   bundle config set without 'development test'; bundle install -j 4 -r 3; \
   else bundle install -j 4 -r 3; \
@@ -77,7 +81,6 @@ RUN pnpm i
 COPY . /app
 
 # creating a log directory so that image wont fail when RAILS_LOG_TO_STDOUT is false
-# https://github.com/chatwoot/chatwoot/issues/701
 RUN mkdir -p /app/log
 
 # generate production assets if production environment
@@ -120,6 +123,7 @@ ARG RAILS_ENV=production
 ENV RAILS_ENV ${RAILS_ENV}
 ENV BUNDLE_PATH="/gems"
 
+# Install runtime dependencies
 RUN apk update && apk add --no-cache \
   build-base \
   openssl \
@@ -128,7 +132,9 @@ RUN apk update && apk add --no-cache \
   imagemagick \
   git \
   vips \
-  && gem install bundler
+  libxml2 \
+  libxslt \
+  && gem install bundler -v ${BUNDLER_VERSION}
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
