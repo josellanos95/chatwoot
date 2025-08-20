@@ -42,6 +42,8 @@ const { t } = useI18n();
 
 const uploadAttachment = ref(null);
 const isEmojiPickerOpen = ref(false);
+const isSchedulerOpen = ref(false);
+const scheduleAt = ref(null);
 
 const EmojiInput = defineAsyncComponent(
   () => import('shared/components/emoji/EmojiInput.vue')
@@ -93,6 +95,35 @@ watch(
 
 const onClickInsertEmoji = emoji => {
   emit('insertEmoji', emoji);
+};
+
+const openScheduler = () => {
+  isSchedulerOpen.value = true;
+};
+
+const closeScheduler = () => {
+  isSchedulerOpen.value = false;
+};
+
+const confirmSchedule = () => {
+  if (scheduleAt.value) {
+    closeScheduler();
+  }
+};
+
+const clearSchedule = () => {
+  scheduleAt.value = null;
+  closeScheduler();
+};
+
+const getMinDateTime = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
 const { onFileUpload } = useFileUpload({
@@ -149,7 +180,7 @@ useKeyboardEvents(keyboardEvents);
 
 <template>
   <div
-    class="flex items-center justify-between w-full h-[3.25rem] gap-2 px-4 py-3"
+    class="relative flex items-center justify-between w-full h-[3.25rem] gap-2 px-4 py-3"
   >
     <div class="flex gap-2 items-center">
       <WhatsAppOptions
@@ -219,14 +250,74 @@ useKeyboardEvents(keyboardEvents);
       />
       <Button
         v-if="!isWhatsappInbox"
+        variant="outline"
+        color="slate"
+        size="sm"
+        class="!text-xs font-medium ml-2"
+        label="Schedule Send"
+        @click="openScheduler"
+      />
+      
+      <!-- Schedule Popover -->
+      <div
+        v-if="isSchedulerOpen"
+        class="absolute bottom-14 right-4 z-50 bg-white dark:bg-n-solid-3 border border-n-strong rounded-lg shadow-lg p-4 min-w-[280px]"
+      >
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-n-slate-12 mb-2">
+            Schedule Message
+          </label>
+          <input
+            v-model="scheduleAt"
+            type="datetime-local"
+            :min="getMinDateTime()"
+            class="w-full px-3 py-2 border border-n-strong rounded-md bg-white dark:bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
+          />
+        </div>
+        <div class="flex gap-2 justify-end">
+          <Button
+            variant="faded"
+            color="slate"
+            size="sm"
+            label="Clear"
+            @click="clearSchedule"
+          />
+          <Button
+            variant="solid"
+            color="blue"
+            size="sm"
+            label="Schedule"
+            :disabled="!scheduleAt"
+            @click="confirmSchedule"
+          />
+        </div>
+      </div>
+      
+      <Button
+        v-if="!isWhatsappInbox"
         :label="sendButtonLabel"
-        color="ruby"
         size="sm"
         class="!text-xs font-medium"
         :disabled="isLoading || disableSendButton"
         :is-loading="isLoading"
         @click="emit('sendMessage')"
       />
+    </div>
+    
+    <!-- Schedule Badge -->
+    <div
+      v-if="scheduleAt"
+      class="absolute bottom-20 right-4 z-40 bg-n-amber-9/10 border border-n-amber-8 rounded-full px-3 py-1.5 flex items-center gap-2"
+    >
+      <span class="text-xs text-n-amber-11 font-medium">
+        Scheduled: {{ new Date(scheduleAt).toLocaleString() }}
+      </span>
+      <button
+        @click="clearSchedule"
+        class="text-n-amber-11 hover:text-n-amber-12 transition-colors"
+      >
+        <span class="text-xs">×</span>
+      </button>
     </div>
   </div>
 </template>
