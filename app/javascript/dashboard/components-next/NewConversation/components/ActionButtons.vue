@@ -220,6 +220,7 @@ useKeyboardEvents(keyboardEvents);
       <Button
         v-if="!isWhatsappInbox"
         :label="sendButtonLabel"
+        color="ruby"
         size="sm"
         class="!text-xs font-medium"
         :disabled="isLoading || disableSendButton"
