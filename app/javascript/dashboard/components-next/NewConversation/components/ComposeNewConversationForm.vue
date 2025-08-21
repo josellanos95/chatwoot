@@ -2,6 +2,8 @@
 import { reactive, ref, computed } from 'vue';
 import { useVuelidate } from '@vuelidate/core';
 import { required, requiredIf } from '@vuelidate/validators';
+import { useI18n } from 'vue-i18n';
+import { useRoute } from 'vue-router';
 import { INBOX_TYPES } from 'dashboard/helper/inbox';
 import {
   appendSignature,
@@ -13,6 +15,9 @@ import {
   prepareNewMessagePayload,
   prepareWhatsAppMessagePayload,
 } from 'dashboard/components-next/NewConversation/helpers/composeConversationHelper.js';
+import { format } from 'date-fns';
+import { scheduleSend } from 'dashboard/api/scheduleSend';
+import { useAlert } from 'dashboard/composables';
 
 import ContactSelector from './ContactSelector.vue';
 import InboxSelector from './InboxSelector.vue';
@@ -47,10 +52,17 @@ const emit = defineEmits([
   'createConversation',
 ]);
 
+const { t } = useI18n();
+const route = useRoute();
+
 const showContactsDropdown = ref(false);
 const showInboxesDropdown = ref(false);
 const showCcEmailsDropdown = ref(false);
 const showBccEmailsDropdown = ref(false);
+
+const scheduledAt = ref(null);
+const isScheduling = ref(false);
+const alert = useAlert || { success: console.log, error: console.error };
 
 const isCreating = computed(() => props.contactConversationsUiFlags.isCreating);
 
@@ -228,6 +240,7 @@ const clearForm = () => {
     bccEmails: '',
     attachedFiles: [],
   });
+  scheduledAt.value = null;
   v$.value.$reset();
 };
 
@@ -242,6 +255,8 @@ const handleSendMessage = async () => {
     });
     if (success) {
       clearForm();
+      // Limpiar el scheduling cuando se envía el mensaje inmediatamente
+      scheduledAt.value = null;
     }
   } catch (error) {
     // Form will not be cleared if conversation creation fails
@@ -260,6 +275,94 @@ const handleSendWhatsappMessage = async ({ message, templateParams }) => {
     payload: whatsappMessagePayload,
     isFromWhatsApp: true,
   });
+  // Limpiar el scheduling cuando se envía el mensaje de WhatsApp
+  scheduledAt.value = null;
+};
+
+const getAccountId = () => {
+  // 1. Intentar obtener desde la ruta (Composition API)
+  if (route?.params?.accountId) {
+    const accountId = Number(route.params.accountId);
+    if (Number.isInteger(accountId) && accountId > 0) {
+      return accountId;
+    }
+  }
+
+  // 2. Parsear desde window.location.pathname
+  if (typeof window !== 'undefined') {
+    const match = window.location.pathname.match(/\/app\/accounts\/(\d+)\//);
+    if (match && match[1]) {
+      const accountId = Number(match[1]);
+      if (Number.isInteger(accountId) && accountId > 0) {
+        return accountId;
+      }
+    }
+  }
+
+  // 3. Fallback a configuraciones globales
+  if (typeof window !== 'undefined' && window?.chatwootConfig?.account_id) {
+    const accountId = Number(window.chatwootConfig.account_id);
+    if (Number.isInteger(accountId) && accountId > 0) {
+      return accountId;
+    }
+  }
+
+  return null;
+};
+
+const onScheduleSend = async (dateValue) => {
+  if (!dateValue) {
+    alert.error(t('SCHEDULE_SEND.VALIDATION_REQUIRED'));
+    return;
+  }
+
+  // Validar que la fecha sea futura (mínimo 1 minuto en el futuro)
+  const now = new Date();
+  const scheduledDate = new Date(dateValue);
+  const minFutureDate = new Date(now.getTime() + 60000); // +1 minuto
+
+  if (scheduledDate < minFutureDate) {
+    alert.error(t('SCHEDULE_SEND.VALIDATION_FUTURE'));
+    return;
+  }
+
+  try {
+    isScheduling.value = true;
+    const accountId = getAccountId();
+
+    const payload = {
+      channel: 'email',
+      account_id: accountId,
+      inbox_id: props.targetInbox?.id,
+      contact_id: props.selectedContact?.id,
+      to: props.selectedContact?.email ? [props.selectedContact.email] : [],
+      cc: state.ccEmails ? state.ccEmails.split(',').map(e => e.trim()).filter(Boolean) : [],
+      bcc: state.bccEmails ? state.bccEmails.split(',').map(e => e.trim()).filter(Boolean) : [],
+      subject: state.subject,
+      message: state.message,
+      message_html: state.message, // HTML del editor
+      message_text: state.message.replace(/<[^>]*>/g, ''), // Texto plano limpiado
+      // timestamps
+      scheduled_at: new Date(dateValue).toISOString(), // UTC
+      scheduled_at_local: format(new Date(dateValue), 'dd/MM/yyyy HH:mm'),
+      timezone_offset_minutes: -new Date().getTimezoneOffset(),
+      // metadata opcional
+      source: 'chatwoot',
+    };
+
+    await scheduleSend(payload);
+    const formattedDateTime = format(new Date(dateValue), 'dd/MM/yyyy HH:mm');
+    const successMessage = t('SCHEDULE_SEND.TOAST_SUCCESS', { datetime: formattedDateTime });
+    console.log('Schedule success, showing toast:', successMessage);
+    alert(successMessage);
+  } catch (e) {
+    const errorMessage = t('SCHEDULE_SEND.TOAST_ERROR');
+    console.log('Schedule error, showing toast:', errorMessage);
+    alert(errorMessage);
+    console.error(e);
+  } finally {
+    isScheduling.value = false;
+  }
 };
 </script>
 
@@ -340,6 +443,8 @@ const handleSendWhatsappMessage = async ({ message, templateParams }) => {
       :has-no-inbox="showNoInboxAlert"
       :is-dropdown-active="isAnyDropdownActive"
       :message-signature="messageSignature"
+      :scheduled-at="scheduledAt"
+      :is-scheduling="isScheduling"
       @insert-emoji="onClickInsertEmoji"
       @add-signature="handleAddSignature"
       @remove-signature="handleRemoveSignature"
@@ -347,6 +452,8 @@ const handleSendWhatsappMessage = async ({ message, templateParams }) => {
       @discard="$emit('discard')"
       @send-message="handleSendMessage"
       @send-whatsapp-message="handleSendWhatsappMessage"
+      @schedule="onScheduleSend"
+      @update:scheduled-at="(value) => scheduledAt = value"
     />
   </div>
 </template>

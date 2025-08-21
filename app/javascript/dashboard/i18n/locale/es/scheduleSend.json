@@ -1,0 +1,16 @@
+{
+  "SCHEDULE_SEND": {
+    "BUTTON": "Agendar envío",
+    "TITLE": "Agendar mensaje",
+    "SUCCESS": "Mensaje programado para {datetime}",
+    "ERROR": "No se pudo programar el mensaje. Intenta de nuevo.",
+    "SELECT_DATE_TIME": "Seleccioná fecha y hora para el envío programado.",
+    "PICKER_CONFIRM": "Confirmar",
+    "TOAST_SUCCESS": "Mensaje programado para {datetime}",
+    "TOAST_ERROR": "No se pudo programar el mensaje. Intenta de nuevo.",
+    "VALIDATION_REQUIRED": "Por favor selecciona fecha y hora para programar.",
+    "VALIDATION_FUTURE": "Por favor selecciona una fecha y hora futura.",
+    "TOOLTIP_SELECT": "Elegir fecha y hora para programar.",
+    "TOOLTIP_READY": "Programar para {datetime}"
+  }
+}
