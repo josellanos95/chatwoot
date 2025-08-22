@@ -11,6 +11,8 @@
     "VALIDATION_REQUIRED": "Please choose date and time to schedule.",
     "VALIDATION_FUTURE": "Please choose a future date and time.",
     "TOOLTIP_SELECT": "Choose date and time to schedule.",
-    "TOOLTIP_READY": "Schedule for {datetime}"
+    "TOOLTIP_READY": "Schedule for {datetime}",
+    "SCHEDULED_CHIP": "Scheduled: {date}",
+    "MESSAGE_REQUIRED": "Message is required"
   }
 }

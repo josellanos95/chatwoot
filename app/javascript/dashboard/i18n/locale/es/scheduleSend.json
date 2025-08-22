@@ -11,6 +11,8 @@
     "VALIDATION_REQUIRED": "Por favor selecciona fecha y hora para programar.",
     "VALIDATION_FUTURE": "Por favor selecciona una fecha y hora futura.",
     "TOOLTIP_SELECT": "Elegir fecha y hora para programar.",
-    "TOOLTIP_READY": "Programar para {datetime}"
+    "TOOLTIP_READY": "Programar para {datetime}",
+    "SCHEDULED_CHIP": "Programado: {date}",
+    "MESSAGE_REQUIRED": "El mensaje es requerido"
   }
 }
