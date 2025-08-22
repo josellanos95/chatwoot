@@ -1,0 +1,18 @@
+{
+  "SCHEDULE_SEND": {
+    "BUTTON": "Schedule Send",
+    "TITLE": "Schedule Message",
+    "SUCCESS": "Message scheduled for {datetime}",
+    "ERROR": "Could not schedule message. Please try again.",
+    "SELECT_DATE_TIME": "Select date and time for scheduled sending.",
+    "PICKER_CONFIRM": "Confirm",
+    "TOAST_SUCCESS": "Message scheduled for {datetime}",
+    "TOAST_ERROR": "Could not schedule message. Please try again.",
+    "VALIDATION_REQUIRED": "Please choose date and time to schedule.",
+    "VALIDATION_FUTURE": "Please choose a future date and time.",
+    "TOOLTIP_SELECT": "Choose date and time to schedule.",
+    "TOOLTIP_READY": "Schedule for {datetime}",
+    "SCHEDULED_CHIP": "Scheduled: {date}",
+    "MESSAGE_REQUIRED": "Message is required"
+  }
+}

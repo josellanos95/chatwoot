@@ -17,10 +17,21 @@ import AIAssistanceButton from '../AIAssistanceButton.vue';
 import { REPLY_EDITOR_MODES } from './constants';
 import { mapGetters } from 'vuex';
 import NextButton from 'dashboard/components-next/button/Button.vue';
+import ScheduleSendPopover from 'dashboard/components-next/ScheduleSend/ScheduleSendPopover.vue';
+import ScheduledChip from 'dashboard/components-next/ScheduleSend/ScheduledChip.vue';
+import { isTelegramConversation, formatDateToLocal, getTimezoneOffsetMinutes } from 'dashboard/helper/conversation';
+import { scheduleTelegramMessage } from 'dashboard/api/telegramScheduleSend';
 
 export default {
   name: 'ReplyBottomPanel',
-  components: { NextButton, FileUpload, VideoCallButton, AIAssistanceButton },
+  components: { 
+    NextButton, 
+    FileUpload, 
+    VideoCallButton, 
+    AIAssistanceButton,
+    ScheduleSendPopover,
+    ScheduledChip,
+  },
   mixins: [inboxMixin],
   props: {
     mode: {
@@ -118,6 +129,10 @@ export default {
       type: String,
       default: '',
     },
+    conversation: {
+      type: Object,
+      default: () => ({}),
+    },
   },
   emits: [
     'replaceText',
@@ -153,6 +168,13 @@ export default {
       setSignatureFlagForInbox,
       fetchSignatureFlagFromUISettings,
       uploadRef,
+    };
+  },
+  data() {
+    return {
+      scheduledAt: null,
+      isScheduling: false,
+      showSchedulePopover: false,
     };
   },
   computed: {
@@ -242,6 +264,25 @@ export default {
     isFetchingAppIntegrations() {
       return this.uiFlags.isFetching;
     },
+    isTelegramConversation() {
+      return isTelegramConversation(this.conversation);
+    },
+    showScheduleSendButton() {
+      return this.isTelegramConversation && !this.isOnPrivateNote;
+    },
+    isScheduleButtonPrimary() {
+      return !!this.scheduledAt;
+    },
+    scheduleButtonTooltip() {
+      if (this.scheduledAt) {
+        return this.$t('SCHEDULE_SEND.TOOLTIP_READY', { datetime: this.formattedScheduledAt });
+      }
+      return this.$t('SCHEDULE_SEND.TOOLTIP_SELECT');
+    },
+    formattedScheduledAt() {
+      if (!this.scheduledAt) return '';
+      return formatDateToLocal(this.scheduledAt);
+    },
   },
   mounted() {
     ActiveStorage.start();
@@ -255,6 +296,92 @@ export default {
     },
     toggleInsertArticle() {
       this.$emit('toggleInsertArticle');
+    },
+    openSchedulePopover() {
+      this.showSchedulePopover = true;
+    },
+    closeSchedulePopover() {
+      this.showSchedulePopover = false;
+    },
+    confirmSchedule(date) {
+      this.scheduledAt = date;
+      this.closeSchedulePopover();
+    },
+    clearSchedule() {
+      this.scheduledAt = null;
+      this.closeSchedulePopover();
+    },
+    onScheduleSendClick() {
+      // Si ya hay una fecha programada, enviar directamente
+      if (this.scheduledAt) {
+        this.onScheduleSend();
+      } else {
+        // Si no hay fecha, abrir el popover
+        this.openSchedulePopover();
+      }
+    },
+    
+    async onScheduleSend() {
+      if (!this.scheduledAt) {
+        this.$emit('showAlert', {
+          type: 'error',
+          message: this.$t('SCHEDULE_SEND.VALIDATION_REQUIRED'),
+        });
+        return;
+      }
+
+      if (!this.message || !this.message.trim()) {
+        this.$emit('showAlert', {
+          type: 'error',
+          message: this.$t('SCHEDULE_SEND.MESSAGE_REQUIRED'),
+        });
+        return;
+      }
+
+      // Validate that scheduled date is in the future
+      const now = new Date();
+      const scheduledDate = new Date(this.scheduledAt);
+      if (scheduledDate <= now) {
+        this.$emit('showAlert', {
+          type: 'error',
+          message: this.$t('SCHEDULE_SEND.VALIDATION_FUTURE'),
+        });
+        return;
+      }
+
+      try {
+        this.isScheduling = true;
+        
+        const params = {
+          accountId: this.accountId,
+          inboxId: this.conversation.inbox_id,
+          conversationId: this.conversation.id,
+          contactId: this.conversation.meta?.sender?.id || this.conversation.contact_id,
+          message: this.message.trim(),
+          messageHtml: this.message.trim(), // For Telegram, we'll use plain text
+          scheduledAt: this.scheduledAt,
+          scheduledAtLocal: this.formattedScheduledAt,
+          timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
+        };
+
+        await scheduleTelegramMessage(params);
+
+        this.$emit('showAlert', {
+          type: 'success',
+          message: this.$t('SCHEDULE_SEND.TOAST_SUCCESS', { datetime: this.formattedScheduledAt }),
+        });
+
+        // Clear the scheduled date after successful scheduling
+        this.scheduledAt = null;
+      } catch (error) {
+        console.error('Error scheduling Telegram message:', error);
+        this.$emit('showAlert', {
+          type: 'error',
+          message: error.message || this.$t('SCHEDULE_SEND.TOAST_ERROR'),
+        });
+      } finally {
+        this.isScheduling = false;
+      }
     },
   },
 };
@@ -374,6 +501,21 @@ export default {
       />
     </div>
     <div class="right-wrap">
+
+      
+      <!-- Botón Schedule Send para Telegram -->
+      <NextButton
+        v-if="showScheduleSendButton"
+        :variant="isScheduleButtonPrimary ? 'solid' : 'outline'"
+        :color="isScheduleButtonPrimary ? 'blue' : 'slate'"
+        size="sm"
+        class="!text-xs font-medium mr-2"
+        :label="$t('SCHEDULE_SEND.BUTTON')"
+        :title="scheduleButtonTooltip"
+        :disabled="isScheduling"
+        :is-loading="isScheduling"
+        @click="onScheduleSendClick"
+      />
       <NextButton
         :label="sendButtonText"
         type="submit"
@@ -384,6 +526,23 @@ export default {
         @click="onSend"
       />
     </div>
+    
+
+    
+    <!-- Schedule Send Popover -->
+    <ScheduleSendPopover
+      :is-open="showSchedulePopover"
+      :scheduled-at="scheduledAt"
+      @confirm="confirmSchedule"
+      @clear="clearSchedule"
+    />
+    
+    <!-- Scheduled Chip -->
+    <ScheduledChip
+      :scheduled-at="scheduledAt"
+      @edit="openSchedulePopover"
+      @clear="clearSchedule"
+    />
   </div>
 </template>
 

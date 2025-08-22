@@ -8,6 +8,7 @@ import { ALLOWED_FILE_TYPES } from 'shared/constants/messages';
 import { useKeyboardEvents } from 'dashboard/composables/useKeyboardEvents';
 import FileUpload from 'vue-upload-component';
 import { extractTextFromMarkdown } from 'dashboard/helper/editorHelper';
+import { format } from 'date-fns';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import WhatsAppOptions from './WhatsAppOptions.vue';
@@ -26,6 +27,8 @@ const props = defineProps({
   isDropdownActive: { type: Boolean, default: false },
   messageSignature: { type: String, default: '' },
   inboxId: { type: Number, default: null },
+  scheduledAt: { type: [Date, String, Number, null], default: null },
+  isScheduling: { type: Boolean, default: false },
 });
 
 const emit = defineEmits([
@@ -36,12 +39,17 @@ const emit = defineEmits([
   'addSignature',
   'removeSignature',
   'attachFile',
+  'schedule',
+  'update:scheduledAt',
 ]);
 
 const { t } = useI18n();
 
 const uploadAttachment = ref(null);
 const isEmojiPickerOpen = ref(false);
+const isSchedulerOpen = ref(false);
+const scheduleAt = ref(null);
+const tempDate = ref(null);
 
 const EmojiInput = defineAsyncComponent(
   () => import('shared/components/emoji/EmojiInput.vue')
@@ -94,6 +102,86 @@ watch(
 const onClickInsertEmoji = emoji => {
   emit('insertEmoji', emoji);
 };
+
+const openScheduler = () => {
+  isSchedulerOpen.value = true;
+  // Siempre usar el estado interno scheduleAt, no la prop
+  tempDate.value = scheduleAt.value ? new Date(scheduleAt.value) : null;
+};
+
+const closeScheduler = () => {
+  isSchedulerOpen.value = false;
+};
+
+const confirmSchedule = () => {
+  if (tempDate.value) {
+    scheduleAt.value = new Date(tempDate.value);
+    // Emitir el evento para sincronizar con el componente padre
+    emit('update:scheduledAt', scheduleAt.value);
+    closeScheduler();
+  }
+};
+
+const clearSchedule = () => {
+  tempDate.value = null;
+  scheduleAt.value = null;
+  // Emitir el evento para sincronizar con el componente padre
+  emit('update:scheduledAt', null);
+  closeScheduler();
+};
+
+const isScheduleButtonPrimary = computed(() => !!scheduleAt.value);
+const scheduleButtonTooltip = computed(() => {
+  if (scheduleAt.value) {
+    return t('SCHEDULE_SEND.TOOLTIP_READY', { datetime: formattedScheduledAt.value });
+  }
+  return t('SCHEDULE_SEND.TOOLTIP_SELECT');
+});
+
+const scheduleButtonLabel = computed(() => {
+  if (scheduleAt.value) {
+    return t('SCHEDULE_SEND.BUTTON');
+  }
+  return t('SCHEDULE_SEND.BUTTON');
+});
+
+const onScheduleClick = () => {
+  if (scheduleAt.value) {
+    // Si ya hay una fecha seleccionada, emitir el evento para ejecutar el POST
+    emit('schedule', scheduleAt.value);
+  } else {
+    // Si no hay fecha, abrir el picker
+    openScheduler();
+  }
+};
+
+const onEditSchedule = () => {
+  // Abrir el picker para editar la fecha existente
+  openScheduler();
+};
+
+const getMinDateTime = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
+const formattedScheduledAt = computed(() =>
+  scheduleAt.value ? format(new Date(scheduleAt.value), 'dd/MM/yyyy HH:mm') : ''
+);
+
+// Sincronizar la prop scheduledAt con el estado interno
+watch(() => props.scheduledAt, (newValue) => {
+  if (newValue) {
+    scheduleAt.value = new Date(newValue);
+  } else {
+    scheduleAt.value = null;
+  }
+}, { immediate: true });
 
 const { onFileUpload } = useFileUpload({
   isATwilioSMSChannel: props.isTwilioSmsInbox,
@@ -149,7 +237,7 @@ useKeyboardEvents(keyboardEvents);
 
 <template>
   <div
-    class="flex items-center justify-between w-full h-[3.25rem] gap-2 px-4 py-3"
+    class="relative flex items-center justify-between w-full h-[3.25rem] gap-2 px-4 py-3"
   >
     <div class="flex gap-2 items-center">
       <WhatsAppOptions
@@ -219,13 +307,82 @@ useKeyboardEvents(keyboardEvents);
       />
       <Button
         v-if="!isWhatsappInbox"
+        :variant="isScheduleButtonPrimary ? 'solid' : 'outline'"
+        :color="isScheduleButtonPrimary ? 'blue' : 'slate'"
+        size="sm"
+        class="!text-xs font-medium ml-2"
+        :label="t('SCHEDULE_SEND.BUTTON')"
+        :title="scheduleButtonTooltip"
+        :disabled="isScheduling"
+        :is-loading="isScheduling"
+        @click="onScheduleClick"
+      />
+      
+      <!-- Schedule Popover -->
+      <div
+        v-if="isSchedulerOpen"
+        class="absolute bottom-14 right-4 z-50 bg-white dark:bg-n-solid-3 border border-n-strong rounded-lg shadow-lg p-4 min-w-[380px]"
+      >
+        <div class="mb-3">
+          <label class="block text-sm font-medium text-n-slate-12 mb-2">
+            {{ t('SCHEDULE_SEND.TITLE') }}
+          </label>
+          <input
+            v-model="tempDate"
+            type="datetime-local"
+            :min="getMinDateTime()"
+            class="w-full px-3 py-2 border border-n-strong rounded-md bg-white dark:bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
+          />
+        </div>
+        <div class="flex gap-2 justify-end">
+          <Button
+            variant="faded"
+            color="slate"
+            size="sm"
+            :label="t('GENERAL.CLEAR')"
+            @click="clearSchedule"
+          />
+          <Button
+            variant="solid"
+            color="blue"
+            size="sm"
+            :label="t('SCHEDULE_SEND.PICKER_CONFIRM')"
+            :disabled="!tempDate"
+            aria-label="Confirm scheduled date and time"
+            @click="confirmSchedule"
+          />
+        </div>
+      </div>
+      
+      <Button
+        v-if="!isWhatsappInbox"
         :label="sendButtonLabel"
         size="sm"
         class="!text-xs font-medium"
-        :disabled="isLoading || disableSendButton"
+        :disabled="isLoading || disableSendButton || isScheduling"
         :is-loading="isLoading"
         @click="emit('sendMessage')"
       />
+    </div>
+    
+    <!-- Schedule Badge -->
+    <div
+      v-if="scheduleAt"
+      class="absolute bottom-20 right-4 z-40 bg-n-amber-9/10 border border-n-amber-8 rounded-full px-3 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-n-amber-9/20 transition-colors"
+      @click="onEditSchedule"
+      title="Click to edit scheduled time"
+    >
+      <span class="text-xs text-n-amber-11 font-medium">
+        Scheduled: {{ formattedScheduledAt }}
+      </span>
+      <button
+        @click.stop="clearSchedule"
+        class="text-n-amber-11 hover:text-n-amber-12 transition-colors"
+        title="Clear scheduled time"
+        aria-label="Clear scheduled time"
+      >
+        <span class="text-xs">×</span>
+      </button>
     </div>
   </div>
 </template>

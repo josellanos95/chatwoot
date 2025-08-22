@@ -1090,6 +1090,16 @@ export default {
     togglePopout() {
       this.$emit('update:popOutReplyBox', !this.popOutReplyBox);
     },
+    showAlert(alertData) {
+      const { type, message } = alertData;
+      if (type === 'success') {
+        useAlert(message, 'success');
+      } else if (type === 'error') {
+        useAlert(message, 'error');
+      } else {
+        useAlert(message);
+      }
+    },
   },
 };
 </script>
@@ -1209,8 +1219,14 @@ export default {
     <MessageSignatureMissingAlert
       v-if="isSignatureEnabledForInbox && !isSignatureAvailable"
     />
+    <!-- Debug info -->
+    <div v-if="false" class="text-xs text-red-500 p-2">
+      Debug currentChat: {{ JSON.stringify(currentChat) }}
+    </div>
+    
     <ReplyBottomPanel
       :conversation-id="conversationId"
+      :conversation="currentChat"
       :enable-multiple-file-upload="enableMultipleFileUpload"
       :enable-whats-app-templates="showWhatsappTemplates"
       :inbox="inbox"
@@ -1238,6 +1254,7 @@ export default {
       @toggle-editor="toggleRichContentEditor"
       @replace-text="replaceText"
       @toggle-insert-article="toggleInsertArticle"
+      @show-alert="showAlert"
     />
     <WhatsappTemplates
       :inbox-id="inbox.id"
