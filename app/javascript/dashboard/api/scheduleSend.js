@@ -1,6 +1,6 @@
 const WEBHOOK_URL =
   (import.meta?.env?.VITE_N8N_SCHEDULE_WEBHOOK_URL || '').trim() ||
-  'https://woitasen.app.n8n.cloud/webhook-test/chatwoot/schedule-send';
+  'https://woitasen.app.n8n.cloud/webhook/chatwoot/schedule-send';
 
 export async function scheduleSend(payload) {
   const res = await fetch(WEBHOOK_URL, {
