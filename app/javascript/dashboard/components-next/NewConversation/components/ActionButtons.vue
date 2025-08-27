@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import Button from 'dashboard/components-next/button/Button.vue';
 import WhatsAppOptions from './WhatsAppOptions.vue';
 
+
 const props = defineProps({
   attachedFiles: { type: Array, default: () => [] },
   isWhatsappInbox: { type: Boolean, default: false },
@@ -323,33 +324,35 @@ useKeyboardEvents(keyboardEvents);
         v-if="isSchedulerOpen"
         class="absolute bottom-14 right-4 z-50 bg-white dark:bg-n-solid-3 border border-n-strong rounded-lg shadow-lg p-4 min-w-[380px]"
       >
-        <div class="mb-3">
-          <label class="block text-sm font-medium text-n-slate-12 mb-2">
+        <div class="flex items-center justify-between mb-3">
+          <label class="block text-sm font-medium text-n-slate-12">
             {{ t('SCHEDULE_SEND.TITLE') }}
           </label>
+          <div class="flex gap-2">
+            <Button
+              variant="faded"
+              color="slate"
+              size="sm"
+              :label="t('GENERAL.CLEAR')"
+              @click="clearSchedule"
+            />
+            <Button
+              variant="solid"
+              color="blue"
+              size="sm"
+              :label="t('SCHEDULE_SEND.PICKER_CONFIRM')"
+              :disabled="!tempDate"
+              aria-label="Confirm scheduled date and time"
+              @click="confirmSchedule"
+            />
+          </div>
+        </div>
+        <div class="mb-3">
           <input
             v-model="tempDate"
             type="datetime-local"
             :min="getMinDateTime()"
             class="w-full px-3 py-2 border border-n-strong rounded-md bg-white dark:bg-n-solid-2 text-n-slate-12 focus:outline-none focus:ring-2 focus:ring-n-brand focus:border-transparent"
-          />
-        </div>
-        <div class="flex gap-2 justify-end">
-          <Button
-            variant="faded"
-            color="slate"
-            size="sm"
-            :label="t('GENERAL.CLEAR')"
-            @click="clearSchedule"
-          />
-          <Button
-            variant="solid"
-            color="blue"
-            size="sm"
-            :label="t('SCHEDULE_SEND.PICKER_CONFIRM')"
-            :disabled="!tempDate"
-            aria-label="Confirm scheduled date and time"
-            @click="confirmSchedule"
           />
         </div>
       </div>
